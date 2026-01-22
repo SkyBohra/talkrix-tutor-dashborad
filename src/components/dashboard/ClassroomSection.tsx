@@ -180,7 +180,8 @@ export default function ClassroomSection() {
                     question,
                     subject: 'general',
                     include_visual: true,
-                    include_avatar: true
+                    include_avatar: true,
+                    voice_id: '21m00Tcm4TlvDq8ikWAM'
                 })
             });
 
@@ -279,12 +280,12 @@ export default function ClassroomSection() {
                                     }]);
                                     
                                     // Play audio ONLY for the spoken part
-                                    console.log('📢 Complete event - audioBase64 exists:', !!audioBase64, ', isMuted:', isMuted);
-                                    if (audioBase64 && !isMuted) {
+                                    console.log('📢 Complete event - audioBase64 exists:', !!audioBase64, ', length:', audioBase64?.length || 0, ', isMuted:', isMuted);
+                                    if (audioBase64 && audioBase64.length > 0 && !isMuted) {
                                         console.log('🔊 Calling playElevenLabsAudio with audio length:', audioBase64.length);
-                                        playElevenLabsAudio(audioBase64, lipSync);
+                                        playElevenLabsAudio(audioBase64, lipSync, spokenAnswer);
                                     } else {
-                                        console.log('🔇 Using browser TTS - audioBase64:', !!audioBase64, ', muted:', isMuted);
+                                        console.log('🔇 Using browser TTS - audioBase64:', !!audioBase64, ', length:', audioBase64?.length || 0, ', muted:', isMuted);
                                         speakWithBrowser(spokenAnswer);
                                     }
                                     break;
@@ -362,79 +363,12 @@ export default function ClassroomSection() {
         speakWithBrowser(response);
     };
 
-    // Play ElevenLabs audio with lip sync
-    const playElevenLabsAudio = useCallback((base64Audio: string, lipSync: LipSyncData | null) => {
-        console.log('🎵 Playing ElevenLabs audio, length:', base64Audio?.length || 0);
-        
-        if (!base64Audio || base64Audio.length < 100) {
-            console.error('❌ Audio data is missing or too short');
-            speakWithBrowser(streamingText || messages[messages.length - 1]?.text || '');
-            return;
-        }
-        
-        setState('speaking');
-        setStreamingText('');
-        
-        const audio = new Audio(`data:audio/mpeg;base64,${base64Audio}`);
-        setAudioElement(audio);
-
-        // Start lip sync animation
-        if (lipSync && lipSync.frames.length > 0) {
-            const startTime = Date.now();
-            
-            lipSyncIntervalRef.current = setInterval(() => {
-                const elapsed = (Date.now() - startTime) / 1000;
-                
-                // Find current frame
-                const currentFrame = lipSync.frames.find(
-                    f => elapsed >= f.start && elapsed < f.end
-                );
-                
-                if (currentFrame) {
-                    setCurrentMouthShape(currentFrame.shape);
-                } else if (elapsed > lipSync.duration) {
-                    setCurrentMouthShape('closed');
-                    if (lipSyncIntervalRef.current) {
-                        clearInterval(lipSyncIntervalRef.current);
-                    }
-                }
-            }, 50);
-        }
-
-        audio.onended = () => {
-            console.log('✅ Audio playback finished');
-            setState('idle');
-            setCurrentMouthShape('closed');
-            if (lipSyncIntervalRef.current) {
-                clearInterval(lipSyncIntervalRef.current);
-            }
-            // Stay idle - don't auto-start listening
-            // User can click mic button to ask another question
-        };
-
-        audio.onerror = (e) => {
-            console.error('❌ Audio error:', e);
-            setState('idle');
-            setCurrentMouthShape('closed');
-            // Fallback to browser TTS
-            speakWithBrowser(streamingText || messages[messages.length - 1]?.text || '');
-        };
-
-        audio.play().then(() => {
-            console.log('🔊 Audio started playing successfully');
-        }).catch((err) => {
-            console.error('❌ Audio play failed:', err);
-            // If audio fails, use browser TTS
-            speakWithBrowser(streamingText || messages[messages.length - 1]?.text || '');
-        });
-    }, [streamingText, messages]);
-
-    // Browser TTS fallback
+    // Browser TTS fallback - MUST be defined before playElevenLabsAudio
     const speakWithBrowser = useCallback((text: string) => {
+        console.log('🔇 Browser TTS called with text:', text?.substring(0, 50));
         if (isMuted) {
             setState('idle');
             setStreamingText('');
-            // Stay idle - don't auto-start listening
             return;
         }
 
@@ -462,12 +396,119 @@ export default function ClassroomSection() {
             clearInterval(mouthInterval);
             setState('idle');
             setCurrentMouthShape('closed');
-            // Stay idle - don't auto-start listening
-            // User can click mic button to ask another question
         };
 
         window.speechSynthesis.speak(utterance);
     }, [isMuted]);
+
+    // Play ElevenLabs audio with lip sync
+    const playElevenLabsAudio = useCallback((base64Audio: string, lipSync: LipSyncData | null, fallbackText: string = '') => {
+        console.log('🎵 playElevenLabsAudio called, audio length:', base64Audio?.length || 0);
+        
+        if (!base64Audio || base64Audio.length < 100) {
+            console.error('❌ Audio data is missing or too short, using browser TTS');
+            if (fallbackText) speakWithBrowser(fallbackText);
+            return;
+        }
+        
+        // IMPORTANT: Stop and clean up any existing audio first
+        if (audioElement) {
+            console.log('🛑 Stopping previous audio...');
+            audioElement.pause();
+            audioElement.src = '';
+            audioElement.load();
+        }
+        
+        // Clear any existing lip sync interval
+        if (lipSyncIntervalRef.current) {
+            clearInterval(lipSyncIntervalRef.current);
+            lipSyncIntervalRef.current = null;
+        }
+        
+        setState('speaking');
+        setStreamingText('');
+        
+        try {
+            // Convert base64 to blob
+            const byteCharacters = atob(base64Audio);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            const blob = new Blob([byteArray], { type: 'audio/mpeg' });
+            const audioUrl = URL.createObjectURL(blob);
+            
+            console.log('🎵 Audio blob created, size:', blob.size, 'URL:', audioUrl);
+            
+            const audio = new Audio();
+            audio.volume = 1.0;
+            audio.preload = 'auto';
+            
+            // Store reference to clean up later
+            setAudioElement(audio);
+
+            // Start lip sync animation
+            if (lipSync && lipSync.frames.length > 0) {
+                const startTime = Date.now();
+                lipSyncIntervalRef.current = setInterval(() => {
+                    const elapsed = (Date.now() - startTime) / 1000;
+                    const currentFrame = lipSync.frames.find(f => elapsed >= f.start && elapsed < f.end);
+                    if (currentFrame) {
+                        setCurrentMouthShape(currentFrame.shape);
+                    } else if (elapsed > lipSync.duration) {
+                        setCurrentMouthShape('closed');
+                        if (lipSyncIntervalRef.current) clearInterval(lipSyncIntervalRef.current);
+                    }
+                }, 50);
+            }
+
+            audio.oncanplaythrough = () => {
+                console.log('✅ Audio can play through, starting playback...');
+                audio.play().catch(err => {
+                    console.error('❌ Play failed after canplaythrough:', err);
+                    URL.revokeObjectURL(audioUrl);
+                    if (fallbackText) speakWithBrowser(fallbackText);
+                });
+            };
+
+            audio.onended = () => {
+                console.log('✅ ElevenLabs audio finished');
+                URL.revokeObjectURL(audioUrl);
+                setState('idle');
+                setCurrentMouthShape('closed');
+                if (lipSyncIntervalRef.current) {
+                    clearInterval(lipSyncIntervalRef.current);
+                    lipSyncIntervalRef.current = null;
+                }
+                setAudioElement(null); // Clear the reference
+            };
+
+            audio.onerror = (e) => {
+                console.error('❌ Audio error:', e);
+                URL.revokeObjectURL(audioUrl);
+                setState('idle');
+                setCurrentMouthShape('closed');
+                setAudioElement(null); // Clear the reference
+                if (fallbackText) speakWithBrowser(fallbackText);
+            };
+
+            // Set source and load
+            audio.src = audioUrl;
+            audio.load();
+            
+            // Try to play immediately
+            audio.play().then(() => {
+                console.log('🔊 Audio playback started successfully');
+            }).catch(err => {
+                console.log('⏳ Direct play blocked, waiting for canplaythrough...', err.message);
+            });
+            
+        } catch (error) {
+            console.error('❌ Error setting up audio:', error);
+            if (fallbackText) speakWithBrowser(fallbackText);
+        }
+    }, [speakWithBrowser, audioElement]);
 
     // Stop speaking
     const stopSpeaking = useCallback(() => {
