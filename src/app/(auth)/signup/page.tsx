@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { User, Lock, Mail, Loader2 } from "lucide-react";
+import { API_CONFIG, API_ENDPOINTS } from '@/lib/api-config';
 
 export default function SignupPage() {
     const [name, setName] = useState("");
@@ -20,20 +21,19 @@ export default function SignupPage() {
         setError("");
         setIsLoading(true);
         try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/register`, {
+            const res = await fetch(`${API_CONFIG.baseUrl}${API_ENDPOINTS.register}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name, email, password }),
+                body: JSON.stringify({ full_name: name, email, password, role: "teacher" }),
             });
             const data = await res.json();
             if (!res.ok || data.statusCode >= 400) {
                 throw new Error(data.error || data.message || "Signup failed");
             }
-            localStorage.setItem("teacher_token", data.data.access_token);
-            const tokenPayload = JSON.parse(atob(data.data.access_token.split('.')[1]));
-            localStorage.setItem("teacher_userId", tokenPayload.sub);
-            localStorage.setItem("teacher_userName", data.data.name || "");
-            localStorage.setItem("teacher_userEmail", data.data.email || "");
+            localStorage.setItem("teacher_token", data.access_token);
+            localStorage.setItem("teacher_userId", data.user.id);
+            localStorage.setItem("teacher_userName", data.user.full_name || "");
+            localStorage.setItem("teacher_userEmail", data.user.email || "");
             router.push("/dashboard");
         } catch (err: unknown) {
             const errorMessage = err instanceof Error ? err.message : "Signup failed.";

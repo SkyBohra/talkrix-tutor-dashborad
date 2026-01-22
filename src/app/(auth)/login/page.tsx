@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { User, Lock, Loader2, Check } from "lucide-react";
+import { API_CONFIG, API_ENDPOINTS } from '@/lib/api-config';
 
 export default function LoginPage() {
     const [email, setEmail] = useState("");
@@ -20,7 +21,7 @@ export default function LoginPage() {
         setError("");
         setIsLoading(true);
         try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
+            const res = await fetch(`${API_CONFIG.baseUrl}${API_ENDPOINTS.login}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, password }),
@@ -29,11 +30,10 @@ export default function LoginPage() {
             if (!res.ok || data.statusCode >= 400) {
                 throw new Error(data.error || data.message || "Invalid credentials");
             }
-            localStorage.setItem("teacher_token", data.data.access_token);
-            const tokenPayload = JSON.parse(atob(data.data.access_token.split('.')[1]));
-            localStorage.setItem("teacher_userId", tokenPayload.sub);
-            localStorage.setItem("teacher_userName", data.data.name || "");
-            localStorage.setItem("teacher_userEmail", data.data.email || "");
+            localStorage.setItem("teacher_token", data.access_token);
+            localStorage.setItem("teacher_userId", data.user.id);
+            localStorage.setItem("teacher_userName", data.user.full_name || "");
+            localStorage.setItem("teacher_userEmail", data.user.email || "");
             router.push("/dashboard");
         } catch (err: unknown) {
             const errorMessage = err instanceof Error ? err.message : "Login failed.";
