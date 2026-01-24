@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Sidebar from "@/components/dashboard/Sidebar";
 import DashboardSection from "@/components/dashboard/DashboardSection";
 import ClassroomSection from "@/components/dashboard/ClassroomSection";
+import RealClassroomSection from "@/components/dashboard/RealClassroomSection";
 import CoursesSection from "@/components/dashboard/CoursesSection";
 import StudentsSection from "@/components/dashboard/StudentsSection";
 import ContentSection from "@/components/dashboard/ContentSection";
@@ -35,6 +36,8 @@ export default function Dashboard() {
                 return <DashboardSection />;
             case "classroom":
                 return <ClassroomSection />;
+            case "real-classroom":
+                return <RealClassroomSection />;
             case "courses":
                 return <CoursesSection />;
             case "students":

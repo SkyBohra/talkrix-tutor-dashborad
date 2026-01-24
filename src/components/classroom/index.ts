@@ -7,3 +7,5 @@ export { SpeakingAvatar } from './SpeakingAvatar';
 export { ExplanationDisplay } from './ExplanationDisplay';
 export { QuestionInput } from './QuestionInput';
 export { VoiceQuestionInput } from './VoiceQuestionInput';
+export { default as RealisticClassroom } from './RealisticClassroom';
+export { default as LiveKitClassroom } from './LiveKitClassroom';

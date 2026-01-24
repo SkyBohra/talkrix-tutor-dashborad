@@ -12,6 +12,7 @@ import {
     ChevronRight,
     GraduationCap,
     Presentation,
+    School,
 } from "lucide-react";
 
 type SidebarItem = {
@@ -23,6 +24,7 @@ type SidebarItem = {
 const sidebarItems: SidebarItem[] = [
     { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
     { id: "classroom", label: "Classroom", icon: <Presentation size={20} /> },
+    { id: "real-classroom", label: "Real Classroom", icon: <School size={20} /> },
     { id: "courses", label: "Courses", icon: <BookOpen size={20} /> },
     { id: "students", label: "Students", icon: <Users size={20} /> },
     { id: "content", label: "Content", icon: <FileText size={20} /> },
