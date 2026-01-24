@@ -381,6 +381,7 @@ function ProfessionalClassroom({ session, onLeave }: { session: StudentSession; 
   const [messages, setMessages] = useState<{ role: 'user' | 'teacher'; text: string; time: string }[]>([]);
   const [userInput, setUserInput] = useState('');
   const [agentConnected, setAgentConnected] = useState(false);
+  const [agentTimeout, setAgentTimeout] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -412,7 +413,11 @@ function ProfessionalClassroom({ session, onLeave }: { session: StudentSession; 
   useEffect(() => {
     if (!room) return;
     const check = () => {
-      setAgentConnected(room.remoteParticipants.size > 0);
+      const connected = room.remoteParticipants.size > 0;
+      setAgentConnected(connected);
+      if (connected) {
+        setAgentTimeout(false);
+      }
     };
     check();
     room.on(RoomEvent.ParticipantConnected, check);
@@ -422,6 +427,19 @@ function ProfessionalClassroom({ session, onLeave }: { session: StudentSession; 
       room.off(RoomEvent.ParticipantDisconnected, check);
     };
   }, [room]);
+
+  // Agent connection timeout - show message if agent doesn't connect in 15 seconds
+  useEffect(() => {
+    if (agentConnected || connectionState !== LKConnectionState.Connected) {
+      return;
+    }
+    const timeout = setTimeout(() => {
+      if (!agentConnected) {
+        setAgentTimeout(true);
+      }
+    }, 15000);
+    return () => clearTimeout(timeout);
+  }, [agentConnected, connectionState]);
 
   // Handle data
   useEffect(() => {
@@ -491,6 +509,33 @@ function ProfessionalClassroom({ session, onLeave }: { session: StudentSession; 
     );
   }
 
+  // Waiting for agent state - show helpful message when agent takes too long
+  if (!agentConnected && agentTimeout && connectionState === LKConnectionState.Connected) {
+    return (
+      <div className="h-full flex items-center justify-center" style={{ background: 'hsl(180,50%,3%)' }}>
+        <div className="text-center max-w-md p-8 rounded-2xl" style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)' }}>
+          <div className="text-5xl mb-4">🎓</div>
+          <p className="text-blue-400 text-xl font-semibold mb-2">Room Connected</p>
+          <p className="text-white/50 text-sm mb-4">Waiting for AI Teacher to join...</p>
+          <div className="w-12 h-12 mx-auto mb-4 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-white/40 text-xs mb-6">
+            Make sure the AI Teacher agent is running.<br/>
+            Run: <code className="bg-white/10 px-2 py-1 rounded">uv run agent.py dev</code>
+          </p>
+          <div className="flex gap-3 justify-center">
+            <button onClick={() => window.location.reload()} className="px-6 py-3 rounded-xl font-medium text-white"
+              style={{ background: 'linear-gradient(135deg, hsl(160,90%,45%), hsl(180,85%,40%))' }}>
+              Retry
+            </button>
+            <button onClick={onLeave} className="px-6 py-3 rounded-xl font-medium text-white bg-white/10 hover:bg-white/20 transition-colors">
+              Leave
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-full flex flex-col" style={{ background: 'hsl(180,50%,3%)' }}>
       {/* Top Navigation Bar */}
@@ -514,9 +559,13 @@ function ProfessionalClassroom({ session, onLeave }: { session: StudentSession; 
         <div className="flex items-center gap-3">
           {/* Connection Status */}
           <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium
-            ${agentConnected ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20'}`}>
-            <div className={`w-2 h-2 rounded-full ${agentConnected ? 'bg-green-400' : 'bg-yellow-400 animate-pulse'}`} />
-            {agentConnected ? 'Teacher Online' : 'Connecting...'}
+            ${agentConnected 
+              ? 'bg-green-500/10 text-green-400 border border-green-500/20' 
+              : connectionState === LKConnectionState.Connected 
+                ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                : 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20'}`}>
+            <div className={`w-2 h-2 rounded-full ${agentConnected ? 'bg-green-400' : connectionState === LKConnectionState.Connected ? 'bg-blue-400 animate-pulse' : 'bg-yellow-400 animate-pulse'}`} />
+            {agentConnected ? 'Teacher Online' : connectionState === LKConnectionState.Connected ? 'Waiting for Teacher...' : 'Connecting...'}
           </div>
 
           {/* Mute Button */}

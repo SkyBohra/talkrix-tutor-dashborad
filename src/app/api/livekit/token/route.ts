@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { AccessToken, RoomServiceClient, AgentDispatchClient } from 'livekit-server-sdk';
+import { AccessToken, RoomServiceClient } from 'livekit-server-sdk';
 
 // Environment variables - check both naming conventions
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY || '';
@@ -81,33 +81,13 @@ export async function POST(request: NextRequest) {
       });
       console.log('Room created:', roomName);
 
-      // Explicitly dispatch an agent to the room using AgentDispatchClient
-      const agentClient = new AgentDispatchClient(
-        LIVEKIT_URL.replace('wss://', 'https://'),
-        LIVEKIT_API_KEY,
-        LIVEKIT_API_SECRET
-      );
-      
-      // Create agent dispatch - this tells LiveKit to assign an agent to this room
-      // Parameters: (roomName, agentName, options)
-      // agentName: '' matches any registered agent with @server.rtc_session()
-      const dispatch = await agentClient.createDispatch(
-        roomName, 
-        '',  // Empty agentName matches any agent
-        {
-          metadata: JSON.stringify({
-            subject: metadata.subject || 'general',
-            student_name: participantName,
-            grade_level: metadata.grade_level || 'general',
-            topic: metadata.topic || '',
-            learning_goal: metadata.learning_goal || '',
-          }),
-        }
-      );
-      console.log('Agent dispatch created:', dispatch);
+      // Note: Agent dispatch is NOT needed when using @server.rtc_session() decorator
+      // The rtc_session decorator automatically connects an agent when participants join
+      // Using explicit dispatch here would cause TWO agents to join (double voice issue)
+      // If you switch to @server.explicit_session(), then you need explicit dispatch
     } catch (e: any) {
-      // Room might already exist or dispatch already active, that's okay
-      console.log('Room/dispatch note:', e?.message || e);
+      // Room might already exist, that's okay
+      console.log('Room creation note:', e?.message || e);
     }
 
     return NextResponse.json({
